@@ -1,0 +1,6 @@
+{
+  "name": "Nexo",
+  "description": "Nexo - AI-powered Career & Development Platform. Master skills, ace interviews, and accelerate your growth.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
