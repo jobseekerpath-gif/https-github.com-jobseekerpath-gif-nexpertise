@@ -433,13 +433,19 @@ Rules for spoken replies:
             nativeLanguage: uiLang !== "English" ? uiLang : undefined,
           });
         } else {
-          releaseTurn();
+          const fallbackText = "I missed that! Could you please say or type that again?";
+          setConvHistory(h => [...h, { role: "ai", text: fallbackText }]);
+          setConvFlowState("ai-speaking");
+          lastAiSpeechRef.current = fallbackText;
+          speakRef.current(fallbackText, "English", releaseTurn);
         }
       } catch {
-        // Never leave the busy flag latched on an unexpected failure, or all
-        // future turns (live and typed) would be silently blocked.
-        aiBusyRef.current = false;
-        setConvFlowState(liveChatRef.current ? "user-speaking" : "idle");
+        // Never leave the busy flag latched on an unexpected failure — offer a friendly retry line
+        const fallbackText = "Sorry, I had a brief connection issue. Please try again!";
+        setConvHistory(h => [...h, { role: "ai", text: fallbackText }]);
+        setConvFlowState("ai-speaking");
+        lastAiSpeechRef.current = fallbackText;
+        speakRef.current(fallbackText, "English", releaseTurn);
       }
     })();
   // `speech` and `speak` intentionally removed from deps — accessed via

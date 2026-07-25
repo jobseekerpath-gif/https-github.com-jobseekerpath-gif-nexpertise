@@ -70,12 +70,22 @@ export function useGeminiStream() {
 
         if (!response.ok) throw new Error(`Server error ${response.status}`);
 
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("text/html")) {
+          throw new Error("Backend API unavailable — received HTML page instead of API stream.");
+        }
+
         let fullText = "";
         for await (const chunk of parseSSE(response, controller.signal)) {
           fullText += chunk;
           setText(fullText);
           onChunk?.(chunk, fullText);
         }
+
+        if (!fullText && !controller.signal.aborted) {
+          throw new Error("AI returned an empty response — please try again.");
+        }
+
         return fullText;
       } catch (err) {
         // AbortError is intentional (user cancelled / language change) — don't surface as error

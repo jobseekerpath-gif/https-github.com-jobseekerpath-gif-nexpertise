@@ -5,8 +5,8 @@ import { AiChatBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-// Models in fallback order — 2.5-flash first (best), then 1.5-flash (1500 RPD free tier)
-const GEMINI_MODEL_CHAIN = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"] as const;
+// Models in1 fallback order - valid Gemini models as per SDK docs
+const GEMINI_MODEL_CHAIN = ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"] as const;
 const ANTHROPIC_MODEL_CHAIN = ["claude-haiku-4-5", "claude-sonnet-4-5"] as const;
 
 function getAnthropicModelChain(_maxTokens: number) {
@@ -17,8 +17,8 @@ function getAnthropicModelChain(_maxTokens: number) {
 }
 
 export function getAI() {
-  // Support both underscore and space variants (Replit sometimes stores secrets with spaces)
-  const apiKey = process.env["GEMINI_API_KEY"] ?? process.env["GEMINI API KEY"];
+  // Support both underscore, space variants, and VITE_ prefixed keys
+  const apiKey = process.env["GEMINI_API_KEY"] ?? process.env["GEMINI API KEY"] ?? process.env["VITE_GEMINI_API_KEY"];
   if (!apiKey) throw new Error("Gemini API key is not configured. Set GEMINI_API_KEY in secrets.");
   return new GoogleGenAI({ apiKey });
 }
@@ -97,10 +97,12 @@ async function streamGemini(
       return;
     } catch (err) {
       const isLast = i === GEMINI_MODEL_CHAIN.length - 1;
-      if (isRateLimit(err) && !isLast) {
-        req.log.warn({ model, err }, "Rate limited — trying fallback model");
-        const delay = retryDelayMs(err);
-        if (delay < 5000) await new Promise((r) => setTimeout(r, delay));
+      if (!isLast) {
+        req.log.warn({ model, err }, "Gemini model error — trying fallback model");
+        if (isRateLimit(err)) {
+          const delay = retryDelayMs(err);
+          if (delay < 5000) await new Promise((r) => setTimeout(r, delay));
+        }
         continue;
       }
       throw err;
@@ -252,8 +254,12 @@ router.post("/ai/chat", async (req, res) => {
           return;
         } catch (err) {
           const isLast = i === GEMINI_MODEL_CHAIN.length - 1;
-          if (isRateLimit(err) && !isLast) {
-            req.log.warn({ model, err }, "Rate limited — trying fallback model");
+          if (!isLast) {
+            req.log.warn({ model, err }, "Gemini model error — trying fallback model");
+            if (isRateLimit(err)) {
+              const delay = retryDelayMs(err);
+              if (delay < 5000) await new Promise((r) => setTimeout(r, delay));
+            }
             continue;
           }
           throw err;

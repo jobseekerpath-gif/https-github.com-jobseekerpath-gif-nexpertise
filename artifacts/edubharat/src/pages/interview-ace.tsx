@@ -661,8 +661,10 @@ Rules:
       undefined,
       { maxTokens: 120 }
     );
-    const opening = full.replace(/^\s*["']?|["']?\s*$/g, "").trim();
-    if (!opening) return;
+    let opening = full.replace(/^\s*["']?|["']?\s*$/g, "").trim();
+    if (!opening) {
+      opening = `Hello ${firstName}, I'm ${coach.name}, and I will be conducting your ${typeMeta.label} interview today. To start off, could you please tell me about your educational background and main subjects?`;
+    }
     // Now that a real interview is starting:
     // - Valid B2B token: company pays on completion — no charge to the candidate
     // - Guest (no b2b): consume free trial slot
