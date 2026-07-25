@@ -86,11 +86,32 @@ if (process.env["NODE_ENV"] !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: "custom",
       configFile: path.join(edubharatPath, "vite.config.ts"),
       root: edubharatPath,
     });
     app.use(vite.middlewares);
+
+    app.use("*", async (req, res, next) => {
+      if (req.originalUrl.startsWith("/api")) return next();
+      // If request has extension like .js, .css, .svg, .png etc., let vite.middlewares handle it or pass 404
+      if (path.extname(req.path) !== "") {
+        return next();
+      }
+      try {
+        const url = req.originalUrl;
+        const indexPath = path.resolve(edubharatPath, "index.html");
+        if (!fs.existsSync(indexPath)) {
+          return next();
+        }
+        let template = fs.readFileSync(indexPath, "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } catch (err) {
     logger.warn({ err }, "Could not start Vite dev middleware — fallback to static if available");
   }
@@ -98,15 +119,23 @@ if (process.env["NODE_ENV"] !== "production") {
   const possibleDistPaths = [
     path.resolve(edubharatPath, "dist/public"),
     path.resolve(process.cwd(), "artifacts/edubharat/dist/public"),
+    path.resolve(process.cwd(), "artifacts/edubharat/dist"),
+    path.resolve(process.cwd(), "dist/public"),
+    path.resolve(process.cwd(), "dist"),
   ];
   const distPath = possibleDistPaths.find((p) => fs.existsSync(p)) || possibleDistPaths[0];
 
   app.use(express.static(distPath));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
-    res.sendFile(path.join(distPath, "index.html"), (err) => {
-      if (err) next(err);
-    });
+    const indexPath = path.join(distPath, "index.html");
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath, (err) => {
+        if (err) next(err);
+      });
+    } else {
+      next();
+    }
   });
 }
 
