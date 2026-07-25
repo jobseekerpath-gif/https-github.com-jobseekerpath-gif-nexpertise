@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request } from "express";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import crypto from "crypto";
-import { db, usersTable, otpsTable } from "@workspace/db";
+import { db, usersTable, otpsTable, adminAuth } from "@workspace/db";
 import { eq, and, gt, sql } from "drizzle-orm";
 import { mergeGuestProgress } from "./journey";
 import { ensureSignupGrant } from "../lib/credits";
@@ -408,8 +408,7 @@ router.post("/auth/logout", (req, res) => {
   });
 });
 
-// POST /api/auth/admin-login — username + password login for admin/local accounts
-// Set ADMIN_USERNAME and ADMIN_PASSWORD_HASH (sha256 hex) as Replit secrets to enable.
+// POST /api/auth/admin-login — username + password login with Firebase Auth SDK integration
 router.post("/auth/admin-login", async (req, res) => {
   try {
     const { username, password } = req.body as { username?: string; password?: string };
@@ -425,12 +424,29 @@ router.post("/auth/admin-login", async (req, res) => {
     }
 
     const adminEmail = "admin@edubharat.in";
+
+    // Firebase Auth SDK User provision / verification
+    let fbUser;
+    try {
+      fbUser = await adminAuth.getUserByEmail(adminEmail);
+    } catch {
+      fbUser = await adminAuth.createUser({
+        email: adminEmail,
+        displayName: "Admin",
+        emailVerified: true,
+      });
+    }
+
+    // Set custom admin claims in Firebase Auth
+    await adminAuth.setCustomUserClaims(fbUser.uid, { admin: true });
+    const customToken = await adminAuth.createCustomToken(fbUser.uid, { admin: true });
+
     let adminRecords = await db.select().from(usersTable).where(eq(usersTable.email, adminEmail)).limit(1);
     if (adminRecords.length === 0) {
       const inserted = await db.insert(usersTable).values({
         email: adminEmail,
         name: "Admin",
-        authProvider: "local",
+        authProvider: "firebase",
       }).returning();
       adminRecords = inserted;
     }
@@ -439,18 +455,70 @@ router.post("/auth/admin-login", async (req, res) => {
     req.session.userId = user.id;
     req.session.userEmail = user.email;
     req.session.userName = user.name ?? undefined;
-    req.session.isAdmin = true; // Only set here — after password-hash verification
-    // Admin login is a student-side path — clear any B2B session
+    req.session.isAdmin = true;
+
     delete req.session.b2bCompanyId;
     delete req.session.b2bCompanyEmail;
     delete req.session.b2bCompanyName;
 
     void recordLogin(user.id, req);
 
-    res.json({ success: true, user: { id: user.id, email: user.email, name: user.name } });
+    res.json({
+      success: true,
+      user: { id: user.id, email: user.email, name: user.name, isAdmin: true },
+      firebaseToken: customToken,
+    });
   } catch (err) {
     req.log?.error?.({ err }, "Admin login error");
     res.status(500).json({ error: "Login failed. Please try again." });
+  }
+});
+
+// POST /api/auth/firebase-login — Verify Firebase ID token from client
+router.post("/auth/firebase-login", async (req, res) => {
+  try {
+    const { idToken } = req.body as { idToken?: string };
+    if (!idToken) {
+      res.status(400).json({ error: "idToken required" });
+      return;
+    }
+
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    const email = decoded.email;
+    if (!email) {
+      res.status(400).json({ error: "Firebase token does not contain email" });
+      return;
+    }
+
+    let records = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    if (records.length === 0) {
+      const inserted = await db.insert(usersTable).values({
+        email,
+        name: decoded.name || email.split("@")[0],
+        picture: decoded.picture,
+        authProvider: "firebase",
+      }).returning();
+      records = inserted;
+      await ensureSignupGrant(inserted[0]!.id);
+    }
+
+    const user = records[0]!;
+    req.session.userId = user.id;
+    req.session.userEmail = user.email;
+    req.session.userName = user.name ?? undefined;
+    if (decoded.admin === true || email === "admin@edubharat.in") {
+      req.session.isAdmin = true;
+    }
+
+    void recordLogin(user.id, req);
+
+    res.json({
+      success: true,
+      user: { id: user.id, email: user.email, name: user.name, isAdmin: req.session.isAdmin === true },
+    });
+  } catch (err) {
+    req.log?.error?.({ err }, "Firebase token verification error");
+    res.status(401).json({ error: "Invalid Firebase token" });
   }
 });
 
