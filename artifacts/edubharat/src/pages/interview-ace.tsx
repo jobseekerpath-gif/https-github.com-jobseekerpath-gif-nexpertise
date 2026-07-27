@@ -18,6 +18,7 @@ import { AnimatedAvatar } from "@/components/avatar";
 import { INTERVIEW_COACHES, recommendedCoachFor } from "@/lib/tutors";
 import { COMPETENCIES, coveredCompetencies, weightedScoreFor, areaForBeat, functionalKnowledgeFor, calibrationFor, type CompetencyKey } from "@/lib/interview-format";
 import { useToast } from "@/hooks/use-toast";
+import { getApiBaseUrl } from "@/lib/api-config";
 import { PageMeta } from "@/components/page-meta";
 import { interviewVerdict as verdictFor, recommendationForWeighted, ratingLabel, RECOMMENDATION_STYLES, type RecommendationLabel } from "@/lib/interview-verdict";
 import {
@@ -672,7 +673,7 @@ Rules:
     if (b2bToken) {
       // Validate the invite token server-side BEFORE bypassing credit/trial checks.
       // This prevents fake tokens from granting unlimited free interviews.
-      const baseCheck = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+      const baseCheck = getApiBaseUrl();
       try {
         const infoRes = await fetch(`${baseCheck}/api/b2b/invite/${b2bToken}/info`, { credentials: "include" });
         if (!infoRes.ok) {
@@ -1305,7 +1306,7 @@ Return ONLY a valid JSON array (no markdown) with one object per question in ord
       localStorage.setItem(key, JSON.stringify(existing.slice(0, 50)));
     } catch { /* ignore */ }
 
-    const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+    const base = getApiBaseUrl();
     if (b2bToken) {
       // B2B: submit to the recruiter endpoint (works for both guests and logged-in users)
       try {

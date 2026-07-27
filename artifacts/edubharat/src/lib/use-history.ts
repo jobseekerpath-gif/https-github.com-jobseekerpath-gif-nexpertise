@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "./use-auth";
+import { getApiBaseUrl } from "./api-config";
 
 export type HistoryItem = {
   id: string;
@@ -10,7 +11,7 @@ export type HistoryItem = {
 };
 
 const STORAGE_KEY = "edubharat_history";
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = getApiBaseUrl();
 
 function loadLocal(): HistoryItem[] {
   try {

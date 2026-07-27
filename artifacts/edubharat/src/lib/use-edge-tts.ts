@@ -11,6 +11,7 @@
  * else is playing.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import { getApiBaseUrl, CLOUD_RUN_BACKEND_URL } from "./api-config";
 
 export type VoiceGender = "male" | "female" | "auto";
 
@@ -36,7 +37,7 @@ export type EdgeSpeakOptions = {
   nativeLanguage?: string;
 };
 
-const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+const BASE = getApiBaseUrl();
 
 // ---------------------------------------------------------------------------
 // Audio context unlock
@@ -204,16 +205,31 @@ export function useEdgeTTS() {
       const hangTimer = setTimeout(() => { if (_abort === ctrl) ctrl.abort(); }, 15_000);
 
       try {
-        const res = await fetch(`${BASE}/api/tts`, {
+        const ttsBase = getApiBaseUrl();
+        let targetUrl = `${ttsBase}/api/tts`;
+        let res = await fetch(targetUrl, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body:    JSON.stringify({ text: text.trim(), language, gender, voiceStyle: options.voiceStyle, nativeLanguage: options.nativeLanguage }),
           signal:  ctrl.signal,
         });
+
+        let ct = res.headers.get("content-type") || "";
+        if (res.ok && ct.includes("text/html") && !targetUrl.startsWith(CLOUD_RUN_BACKEND_URL)) {
+          targetUrl = `${CLOUD_RUN_BACKEND_URL}/api/tts`;
+          res = await fetch(targetUrl, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body:    JSON.stringify({ text: text.trim(), language, gender, voiceStyle: options.voiceStyle, nativeLanguage: options.nativeLanguage }),
+            signal:  ctrl.signal,
+          });
+          ct = res.headers.get("content-type") || "";
+        }
         clearTimeout(hangTimer);
 
-        if (!res.ok || ctrl.signal.aborted) {
+        if (!res.ok || ctrl.signal.aborted || ct.includes("text/html")) {
           if (ownerRef.current) { ownerRef.current = false; setIsSpeaking(false); }
           onEnd?.();
           return;

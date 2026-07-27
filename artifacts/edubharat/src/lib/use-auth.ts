@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { getApiBaseUrl } from "./api-config";
 
 export type AuthUser = {
   id: number;
@@ -9,7 +10,7 @@ export type AuthUser = {
   isAdmin?: boolean;
 };
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = getApiBaseUrl();
 
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);

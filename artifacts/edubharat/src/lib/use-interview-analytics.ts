@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "./use-auth";
+import { getApiBaseUrl } from "./api-config";
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/,"") ?? "";
+const BASE = getApiBaseUrl();
 
 export type InterviewReport = {
   overallScore: number;

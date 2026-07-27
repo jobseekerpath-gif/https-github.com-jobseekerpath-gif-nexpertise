@@ -2,28 +2,18 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { backfillSignupGrants } from "./lib/credits";
 
-const rawPort = process.env["PORT"];
+const port = Number(process.env["PORT"] || 3000);
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
-
-  logger.info({ port }, "Server listening");
+const server = app.listen(port, "0.0.0.0", () => {
+  logger.info({ port }, `Server listening on 0.0.0.0:${port}`);
 
   // Background init — must never crash or delay the server.
-  void backfillSignupGrants();
+  void backfillSignupGrants().catch((err) => {
+    logger.error({ err }, "backfillSignupGrants error");
+  });
 });
+
+server.on("error", (err) => {
+  logger.error({ err }, "Server listen error");
+});
+

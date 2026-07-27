@@ -51,12 +51,11 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port,
-    strictPort: true,
-    host: "0.0.0.0",
+    middlewareMode: true,
+    hmr: false,
     allowedHosts: true,
     fs: {
-      strict: true,
+      strict: false,
     },
   },
   preview: {

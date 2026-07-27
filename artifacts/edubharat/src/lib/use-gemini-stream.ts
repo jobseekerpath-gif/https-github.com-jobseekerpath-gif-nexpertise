@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { getApiBaseUrl, CLOUD_RUN_BACKEND_URL } from "./api-config";
 
 export type StreamOptions = {
   maxTokens?: number;
@@ -58,8 +59,9 @@ export function useGeminiStream() {
       setError(null);
 
       try {
-        const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
-        const response = await fetch(`${base}/api/ai/stream`, {
+        const apiBase = getApiBaseUrl();
+        let targetUrl = `${apiBase}/api/ai/stream`;
+        let response = await fetch(targetUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           // Clamp default token budget for all UI streams to keep Claude/Gemini calls cheap
@@ -68,9 +70,21 @@ export function useGeminiStream() {
           signal: controller.signal,
         });
 
+        let contentType = response.headers.get("content-type") || "";
+        if (response.ok && contentType.includes("text/html") && !targetUrl.startsWith(CLOUD_RUN_BACKEND_URL)) {
+          targetUrl = `${CLOUD_RUN_BACKEND_URL}/api/ai/stream`;
+          response = await fetch(targetUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, system, maxTokens: options?.maxTokens ?? 1200 }),
+            credentials: "include",
+            signal: controller.signal,
+          });
+          contentType = response.headers.get("content-type") || "";
+        }
+
         if (!response.ok) throw new Error(`Server error ${response.status}`);
 
-        const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("text/html")) {
           throw new Error("Backend API unavailable — received HTML page instead of API stream.");
         }

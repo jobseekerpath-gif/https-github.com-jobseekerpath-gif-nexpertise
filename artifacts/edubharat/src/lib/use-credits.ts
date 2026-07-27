@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { getApiBaseUrl } from "./api-config";
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = getApiBaseUrl();
 
 /** Minimum top-up and suggested quick-pick amounts (1 credit = ₹1). */
 export const CREDIT_MIN_PURCHASE = 49;

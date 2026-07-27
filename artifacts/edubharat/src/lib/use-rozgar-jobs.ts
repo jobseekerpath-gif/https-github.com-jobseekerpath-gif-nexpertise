@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RozgarLiveItem, RozgarLiveResponse } from "./use-rozgar-live";
 import type { StudentProfile } from "./use-student-profile";
+import { getApiBaseUrl } from "./api-config";
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = getApiBaseUrl();
 
 // Sections to fetch from /api/rozgar/live when the primary endpoint fails
 const JOB_SECTIONS = ["top_jobs", "govt_jobs", "private_jobs", "internships"] as const;

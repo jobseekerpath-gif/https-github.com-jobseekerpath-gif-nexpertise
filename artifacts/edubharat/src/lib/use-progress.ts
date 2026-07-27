@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "./use-auth";
+import { getApiBaseUrl } from "./api-config";
 
 export type ProgressEntry = {
   id: string;
@@ -11,7 +12,7 @@ export type ProgressEntry = {
 };
 
 const KEY = "edubharat_progress";
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = getApiBaseUrl();
 
 function today() { return new Date().toISOString().slice(0, 10); }
 

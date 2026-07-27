@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useAuth } from "./use-auth";
+import { getApiBaseUrl } from "./api-config";
 
 export type VoiceGender = "male" | "female";
 export type VoiceStyle = "priya" | "neerja" | "meera" | "rohit" | "arjun" | "rahul";
@@ -42,7 +43,7 @@ export type ResumeAnalysis = {
 };
 
 const STORAGE_KEY = "edubharat_student_profile";
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = getApiBaseUrl();
 
 const DEFAULT_PROFILE: StudentProfile = {
   name: "",

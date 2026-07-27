@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { getApiBaseUrl } from "./api-config";
 
 export type RozgarLiveItem = {
   title: string;
@@ -22,7 +23,7 @@ export type RozgarLiveResponse = {
   error?: string;
 };
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = getApiBaseUrl();
 
 export function useRozgarLive() {
   const [data, setData] = useState<RozgarLiveResponse | null>(null);
