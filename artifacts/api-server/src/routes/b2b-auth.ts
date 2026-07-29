@@ -143,6 +143,10 @@ router.post("/b2b/auth/register", async (req: Request, res: Response) => {
     delete req.session.userEmail;
     delete req.session.userName;
 
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
+
     res.json({
       success: true,
       company: { id: company!.id, name: company!.name, email: company!.email, credits: 0 },
@@ -186,6 +190,10 @@ router.post("/b2b/auth/login", async (req: Request, res: Response) => {
     delete req.session.userName;
 
     void recordB2BLogin(company.id, req);
+
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
 
     res.json({
       success: true,

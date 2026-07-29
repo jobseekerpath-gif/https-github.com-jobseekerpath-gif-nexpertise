@@ -119,6 +119,19 @@ console.log(`[auth] To fix redirect_uri_mismatch, add this URL to Google Cloud C
 console.log(`[auth]   → APIs & Services → Credentials → OAuth 2.0 Client → Authorized redirect URIs`);
 console.log(`[auth] Or set the GOOGLE_CALLBACK_URL secret to lock it to a stable URL.`);
 
+passport.serializeUser((user: Express.User, done) => {
+  done(null, (user as { id: number }).id);
+});
+
+passport.deserializeUser(async (id: number, done) => {
+  try {
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    done(null, users[0] ?? null);
+  } catch (err) {
+    done(err);
+  }
+});
+
 function setupPassport() {
   // Support both underscore and space variants of secret names
   const clientID = process.env["GOOGLE_CLIENT_ID"] ?? process.env["GOOGLE CLIENT ID"];
@@ -142,9 +155,6 @@ function setupPassport() {
       {
         clientID,
         clientSecret,
-        // callbackURL is set here as a default but we ALSO pass it dynamically
-        // in the authenticate() middleware calls below so it always reflects the
-        // current environment (useful when the domain changes).
         callbackURL: getCallbackURL(),
       },
       async (_accessToken, _refreshToken, profile, done) => {
@@ -195,16 +205,6 @@ function setupPassport() {
       }
     )
   );
-
-  passport.serializeUser((user: Express.User, done) => done(null, (user as { id: number }).id));
-  passport.deserializeUser(async (id: number, done) => {
-    try {
-      const users = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
-      done(null, users[0] ?? null);
-    } catch (err) {
-      done(err);
-    }
-  });
 }
 
 setupPassport();
@@ -259,6 +259,8 @@ router.get(
       req.session.userId = u.id;
       req.session.userEmail = u.email;
       req.session.userName = u.name ?? undefined;
+      (req.session as any).passport = { user: u.id };
+
       // Explicitly clear admin and B2B privilege — Google OAuth is a student path
       delete req.session.isAdmin;
       delete req.session.b2bCompanyId;
@@ -273,6 +275,18 @@ router.get(
       }
 
       void recordLogin(u.id, req);
+
+      // Persist session to store before sending redirect response
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            logger.error({ err }, "Failed to save session in Google callback");
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
     }
     res.redirect("/");
   }
@@ -364,6 +378,8 @@ router.post("/auth/otp/verify", async (req, res) => {
     req.session.userId = user[0].id;
     req.session.userEmail = user[0].email;
     req.session.userName = user[0].name ?? undefined;
+    (req.session as any).passport = { user: user[0].id };
+
     // Explicitly clear admin and B2B privilege — OTP login is a student path
     delete req.session.isAdmin;
     delete req.session.b2bCompanyId;
@@ -377,6 +393,10 @@ router.post("/auth/otp/verify", async (req, res) => {
 
     void recordLogin(user[0].id, req);
 
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
+
     res.json({ success: true, user: { id: user[0].id, email: user[0].email, name: user[0].name } });
   } catch (err) {
     req.log.error({ err }, "OTP verify error");
@@ -385,27 +405,44 @@ router.post("/auth/otp/verify", async (req, res) => {
 });
 
 router.get("/auth/me", async (req, res) => {
-  if (!req.session.userId) {
+  const userId = req.session.userId || (req.user as any)?.id || (req.session as any).passport?.user;
+  if (!userId) {
     res.json({ user: null });
     return;
   }
   try {
-    const users = await db.select().from(usersTable).where(eq(usersTable.id, req.session.userId)).limit(1);
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, Number(userId))).limit(1);
     if (!users.length) { res.json({ user: null }); return; }
     const user = users[0]!;
-    // Parse skills JSON for client convenience
+
+    // Ensure session properties stay in sync
+    req.session.userId = user.id;
+    req.session.userEmail = user.email;
+    req.session.userName = user.name ?? undefined;
+    (req.session as any).passport = { user: user.id };
+
     let skills: string[] = [];
     if (user.skills) { try { skills = JSON.parse(user.skills) as string[]; } catch { skills = []; } }
     res.json({ user: { ...user, skills, isAdmin: req.session.isAdmin === true } });
-  } catch {
+  } catch (err) {
+    logger.error({ err }, "Error in GET /auth/me");
     res.json({ user: null });
   }
 });
 
 router.post("/auth/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.json({ success: true });
-  });
+  const handleLogout = () => {
+    req.session.destroy(() => {
+      res.clearCookie("connect.sid");
+      res.json({ success: true });
+    });
+  };
+
+  if (typeof req.logout === "function") {
+    req.logout((_err) => handleLogout());
+  } else {
+    handleLogout();
+  }
 });
 
 // POST /api/auth/admin-login — username + password login with Firebase Auth SDK integration
@@ -455,6 +492,7 @@ router.post("/auth/admin-login", async (req, res) => {
     req.session.userId = user.id;
     req.session.userEmail = user.email;
     req.session.userName = user.name ?? undefined;
+    (req.session as any).passport = { user: user.id };
     req.session.isAdmin = true;
 
     delete req.session.b2bCompanyId;
@@ -462,6 +500,10 @@ router.post("/auth/admin-login", async (req, res) => {
     delete req.session.b2bCompanyName;
 
     void recordLogin(user.id, req);
+
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
 
     res.json({
       success: true,
@@ -506,11 +548,16 @@ router.post("/auth/firebase-login", async (req, res) => {
     req.session.userId = user.id;
     req.session.userEmail = user.email;
     req.session.userName = user.name ?? undefined;
+    (req.session as any).passport = { user: user.id };
     if (decoded.admin === true || email === "admin@edubharat.in") {
       req.session.isAdmin = true;
     }
 
     void recordLogin(user.id, req);
+
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
 
     res.json({
       success: true,

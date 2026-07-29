@@ -64,12 +64,30 @@ app.use(
       secure: process.env["NODE_ENV"] === "production",
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: "lax",
     },
   })
 );
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Synchronize req.session.userId, Passport req.user, and req.session.passport
+app.use((req, _res, next) => {
+  if (req.session) {
+    const passportUserId = (req.session as any).passport?.user;
+    const reqUserId = (req.user as any)?.id;
+    const effectiveUserId = req.session.userId || reqUserId || passportUserId;
+
+    if (effectiveUserId) {
+      req.session.userId = effectiveUserId;
+      if (!(req.session as any).passport) {
+        (req.session as any).passport = { user: effectiveUserId };
+      }
+    }
+  }
+  next();
+});
 
 app.use("/api", router);
 
