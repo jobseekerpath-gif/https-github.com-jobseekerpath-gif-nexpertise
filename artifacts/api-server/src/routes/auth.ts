@@ -93,13 +93,29 @@ async function recordLogin(userId: number, req: Request): Promise<void> {
  *  2. APP_URL / PUBLIC_URL / FRONTEND_URL / BASE_URL env vars.
  *  3. Production fallback: https://nexo-platform-b5ac9.web.app/api/auth/google/callback
  */
-function getCallbackURL(): string {
+function getCallbackURL(req?: Request): string {
   const explicit = process.env["GOOGLE_CALLBACK_URL"];
-  if (explicit && !explicit.includes("run.app")) {
-    return explicit;
+  if (explicit && explicit.trim()) {
+    return explicit.trim();
   }
 
-  return "https://nexo-platform-b5ac9.web.app/api/auth/google/callback";
+  if (req) {
+    const host = req.get("x-forwarded-host") || req.get("host");
+    const proto = req.get("x-forwarded-proto") || req.protocol || "https";
+    if (host) {
+      return `${proto}://${host}/api/auth/google/callback`;
+    }
+  }
+
+  const appUrl = (
+    process.env["APP_URL"] ??
+    process.env["PUBLIC_URL"] ??
+    process.env["FRONTEND_URL"] ??
+    process.env["BASE_URL"] ??
+    "https://nexo-platform-b5ac9.web.app"
+  ).replace(/\/$/, "");
+
+  return `${appUrl}/api/auth/google/callback`;
 }
 
 // Log the callback URL once at startup so it's easy to read in workflow logs.
@@ -205,14 +221,14 @@ setupPassport();
  * - The exact callback URL that must be registered in Google Console
  * - Whether email (Resend) is configured for OTP sending
  */
-router.get("/auth/config", (_req, res) => {
+router.get("/auth/config", (req, res) => {
   const hasGoogleId = !!(process.env["GOOGLE_CLIENT_ID"] ?? process.env["GOOGLE CLIENT ID"]);
   const hasGoogleSecret = !!(process.env["GOOGLE_CLIENT_SECRET"] ?? process.env["GOOGLE CLIENT SECRET"]);
   const emailReady = isEmailConfigured();
 
   res.json({
     googleConfigured: hasGoogleId && hasGoogleSecret,
-    googleCallbackUrl: getCallbackURL(),
+    googleCallbackUrl: getCallbackURL(req),
     otpEmailConfigured: emailReady,
     // When email isn't configured (e.g. off-Replit dev), the OTP code is returned
     // in the /auth/otp/send response so login still works.
@@ -223,7 +239,7 @@ router.get("/auth/config", (_req, res) => {
 // Pass callbackURL dynamically so both dev-preview and production domains work
 // without requiring a server restart when REPLIT_DOMAINS changes.
 router.get("/auth/google", (req, res, next) => {
-  const callbackURL = getCallbackURL();
+  const callbackURL = getCallbackURL(req);
   // Stash any guest ID so we can merge progress after OAuth completes.
   const guestId = req.query["guestId"] as string | undefined;
   if (guestId) req.session.pendingGuestId = guestId;
@@ -236,7 +252,7 @@ router.get("/auth/google", (req, res, next) => {
 router.get(
   "/auth/google/callback",
   (req, res, next) => {
-    const callbackURL = getCallbackURL();
+    const callbackURL = getCallbackURL(req);
     passport.authenticate("google", {
       failureRedirect: "/login?error=google_failed",
       callbackURL,
