@@ -124,35 +124,22 @@ passport.deserializeUser(async (id: number, done) => {
 
 function setupPassport() {
   // Support both underscore and space variants of secret names
-  const clientID = process.env["GOOGLE_CLIENT_ID"] ?? process.env["GOOGLE CLIENT ID"];
-  const clientSecret = process.env["GOOGLE_CLIENT_SECRET"] ?? process.env["GOOGLE CLIENT SECRET"];
+  const clientID = process.env["GOOGLE_CLIENT_ID"] ?? process.env["GOOGLE CLIENT ID"] ?? "";
+  const clientSecret = process.env["GOOGLE_CLIENT_SECRET"] ?? process.env["GOOGLE CLIENT SECRET"] ?? "";
 
-  const hasClientId = Boolean(clientID);
-  const hasClientSecret = Boolean(clientSecret);
+  const hasClientId = Boolean(clientID && clientID.trim());
+  const hasClientSecret = Boolean(clientSecret && clientSecret.trim());
 
   console.log("[auth] Passport initialized");
   console.log(`[auth] GOOGLE_CLIENT_ID present: ${hasClientId}`);
   console.log(`[auth] GOOGLE_CLIENT_SECRET present: ${hasClientSecret}`);
 
-  if (!clientID || !clientSecret) {
-    console.warn("[auth] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set — Google login disabled");
-    return;
-  }
-
-  // Diagnostic: log first 8 chars + length so you can verify this matches
-  // the Client ID in Google Cloud Console → APIs & Services → Credentials.
-  // "Error 401: invalid_client / OAuth client not found" means this value is wrong.
-  console.log(`[auth] Google Client ID (first 8 chars): ${clientID.slice(0, 8)}… (length: ${clientID.length})`);
-  console.log(`[auth] Expected format: XXXXXXXXXX-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com (72 chars)`);
-  if (!clientID.endsWith(".apps.googleusercontent.com")) {
-    console.warn("[auth] ⚠️  GOOGLE_CLIENT_ID does not end with .apps.googleusercontent.com — this will cause invalid_client");
-  }
-
+  // Always register Google Strategy so passport.authenticate("google") never throws "Unknown authentication strategy"
   passport.use(
     new GoogleStrategy(
       {
-        clientID,
-        clientSecret,
+        clientID: hasClientId ? clientID : "placeholder-client-id",
+        clientSecret: hasClientSecret ? clientSecret : "placeholder-client-secret",
         callbackURL: getCallbackURL(),
       },
       async (_accessToken, _refreshToken, profile, done) => {
