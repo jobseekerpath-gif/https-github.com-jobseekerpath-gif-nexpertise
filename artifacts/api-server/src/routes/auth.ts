@@ -132,6 +132,14 @@ function setupPassport() {
   // Support both underscore and space variants of secret names
   const clientID = process.env["GOOGLE_CLIENT_ID"] ?? process.env["GOOGLE CLIENT ID"];
   const clientSecret = process.env["GOOGLE_CLIENT_SECRET"] ?? process.env["GOOGLE CLIENT SECRET"];
+
+  const hasClientId = Boolean(clientID);
+  const hasClientSecret = Boolean(clientSecret);
+
+  console.log("[auth] Passport initialized");
+  console.log(`[auth] GOOGLE_CLIENT_ID present: ${hasClientId}`);
+  console.log(`[auth] GOOGLE_CLIENT_SECRET present: ${hasClientSecret}`);
+
   if (!clientID || !clientSecret) {
     console.warn("[auth] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set — Google login disabled");
     return;
@@ -201,6 +209,8 @@ function setupPassport() {
       }
     )
   );
+
+  console.log("[auth] Google strategy registered");
 }
 
 setupPassport();
