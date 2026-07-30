@@ -95,17 +95,11 @@ async function recordLogin(userId: number, req: Request): Promise<void> {
  */
 function getCallbackURL(): string {
   const explicit = process.env["GOOGLE_CALLBACK_URL"];
-  if (explicit) return explicit;
+  if (explicit && !explicit.includes("run.app")) {
+    return explicit;
+  }
 
-  const appUrl = (
-    process.env["APP_URL"] ??
-    process.env["PUBLIC_URL"] ??
-    process.env["FRONTEND_URL"] ??
-    process.env["BASE_URL"] ??
-    "https://nexo-platform-b5ac9.web.app"
-  ).replace(/\/$/, "");
-
-  return `${appUrl}/api/auth/google/callback`;
+  return "https://nexo-platform-b5ac9.web.app/api/auth/google/callback";
 }
 
 // Log the callback URL once at startup so it's easy to read in workflow logs.
@@ -201,7 +195,9 @@ function setupPassport() {
               googleId: profile.id,
             })
             .returning();
-          await ensureSignupGrant(inserted[0]!.id);
+          if (inserted[0]?.id) {
+            await ensureSignupGrant(inserted[0].id);
+          }
           return done(null, inserted[0]);
         } catch (err) {
           return done(err as Error);
