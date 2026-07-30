@@ -272,8 +272,8 @@ router.post("/b2b/campaigns/:id/invites", requireB2BAuth, async (req: Request, r
 
     // Send emails in background (fire-and-forget)
     if (doSend) {
-      const domain = process.env["REPLIT_DOMAINS"]?.split(",")[0]?.trim();
-      const urlBase = domain ? `https://${domain}` : baseUrl;
+      const appUrl = (process.env["APP_URL"] ?? process.env["PUBLIC_URL"] ?? process.env["FRONTEND_URL"] ?? "https://nexo-platform-b5ac9.web.app").replace(/\/$/, "");
+      const urlBase = appUrl || baseUrl;
       for (const invite of inserted) {
         if (!invite.candidateEmail) continue;
         const link = `${urlBase}/b2b-interview/${invite.token}`;

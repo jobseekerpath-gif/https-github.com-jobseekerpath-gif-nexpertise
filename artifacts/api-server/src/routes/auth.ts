@@ -89,27 +89,23 @@ async function recordLogin(userId: number, req: Request): Promise<void> {
  * Determine the Google OAuth callback URL.
  *
  * Priority order:
- *  1. GOOGLE_CALLBACK_URL env var — explicit override, most stable for production.
- *  2. REPLIT_DOMAINS — prefer *.replit.app (deployment), then accept *.replit.dev
- *     (dev preview), then any first domain.
- *  3. localhost fallback for pure local dev.
+ *  1. GOOGLE_CALLBACK_URL env var — explicit override.
+ *  2. APP_URL / PUBLIC_URL / FRONTEND_URL / BASE_URL env vars.
+ *  3. Production fallback: https://nexo-platform-b5ac9.web.app/api/auth/google/callback
  */
 function getCallbackURL(): string {
-  // Explicit override always wins
   const explicit = process.env["GOOGLE_CALLBACK_URL"];
   if (explicit) return explicit;
 
-  const raw = process.env["REPLIT_DOMAINS"] ?? "";
-  const domains = raw.split(",").map((d) => d.trim()).filter(Boolean);
+  const appUrl = (
+    process.env["APP_URL"] ??
+    process.env["PUBLIC_URL"] ??
+    process.env["FRONTEND_URL"] ??
+    process.env["BASE_URL"] ??
+    "https://nexo-platform-b5ac9.web.app"
+  ).replace(/\/$/, "");
 
-  const prodDomain =
-    domains.find((d) => d.endsWith(".replit.app")) ??
-    domains.find((d) => d.endsWith(".replit.dev")) ??
-    domains[0];
-
-  return prodDomain
-    ? `https://${prodDomain}/api/auth/google/callback`
-    : `http://localhost:${process.env["PORT"] ?? 8080}/api/auth/google/callback`;
+  return `${appUrl}/api/auth/google/callback`;
 }
 
 // Log the callback URL once at startup so it's easy to read in workflow logs.
